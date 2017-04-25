@@ -1,0 +1,270 @@
+---
+title: "Cluster Analysis in R"
+author: "Karan Singh Aulakh"
+date: "25 April 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. 
+K-Means
+
+This  example illustrates the formation of a clusterusing K means in R . The library rattle is loaded in order to use the data set wines.
+```{r}
+library('rattle')
+data(wine, package='rattle')
+head(wine)
+
+```
+In this data set, we observe the composition of different wines. Given a set of observations(x1,x2,.,xn), where each observation is a dimensional real vector, k-means clustering aims to partition the n observations into k≤n),S={S1,S2,.,Sk} so as to minimize the within-cluster sum of squares (WCSS). In other words, its objective is to find::
+
+argminS∑i=1k∑xj∈Si‖xj−μi‖2
+
+where μi is the mean of points in Si. The clustering optimization problem is solved with the function kmeans in R.
+
+```{r}
+wine.stand <- scale(wine[-1])  # To standarize the variables
+
+# K-Means
+k.means.fit <- kmeans(wine.stand, 3) # k = 3
+
+```
+
+In k.means.fit are contained all the elements of the cluster output:
+```{r}
+
+attributes(k.means.fit)
+
+# Clusters:
+k.means.fit$cluster
+
+# Cluster size:
+k.means.fit$size
+
+#If we look at the percentage of variance explained as a function of the number of clusters: One should choose a number of clusters so that adding another cluster doesnt give much better modeling of the data. More precisely, if one plots the percentage of variance explained by the clusters against the number of clusters, the first clusters will add much information (explain a lot of variance), but at some point the marginal gain will drop, giving an angle in the graph. The number of clusters is chosen at this point, hence the “elbow criterion”.
+
+wssplot <- function(data, nc=15, seed=1234){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")}
+
+wssplot(wine.stand, nc=6) 
+```
+
+Library clusters allow us to represent (with the aid of PCA) the cluster solution into 2 dimensions:
+
+```{r}
+library(cluster)
+clusplot(wine.stand, k.means.fit$cluster, main='2D representation of the Cluster solution',
+         color=TRUE, shade=TRUE,labels=2, lines=0)
+
+#In order to evaluate the clustering performance we build a confusion matrix:
+
+table(wine[,1],k.means.fit$cluster)
+```
+
+Hierarchical clustering:
+
+Hierarchical methods use a distance matrix as an input for the clustering algorithm. The choice of an appropriate metric will influence the shape of the clusters, as some elements may be close to one another according to one distance and farther away according to another.
+We use the Euclidean distance as an input for the clustering algorithm (Ward’s minimum variance criterion minimizes the total within-cluster variance):
+
+The clustering output can be displayed in a dendrogram
+
+```{r}
+d <- dist(wine.stand, method = "euclidean") # Euclidean distance matrix.
+H.fit <- hclust(d, method="ward.D")
+## The "ward" method has been renamed to "ward.D"; note new "ward.D2"
+
+plot(H.fit) # display dendogram
+groups <- cutree(H.fit, k=3) # cut tree into 5 clusters
+# draw dendogram with red borders around the 5 clusters
+rect.hclust(H.fit, k=3, border="red")
+```
+STUDY CASE I: EUROPEAN PROTEIN CONSUMPTION
+
+Here, the data shall be read from a url.  
+```{r}
+url = 'http://www.biz.uiowa.edu/faculty/jledolter/DataMining/protein.csv'
+food <- read.csv(url)
+head(food)
+```
+We start first, clustering on just Red and White meat (p=2) and k=3 clusters
+```{r}
+set.seed(123456789) ## to fix the random starting clusters
+grpMeat <- kmeans(food[,c("WhiteMeat","RedMeat")], centers=3, nstart=10)
+grpMeat
+
+## list of cluster assignments
+o=order(grpMeat$cluster)
+data.frame(food$Country[o],grpMeat$cluster[o])
+```
+
+To see a graphical representation of the clustering solution we plot cluster assignments on Red and White meat on a scatter plot:
+
+```{r}
+plot(food$Red, food$White, type="n", xlim=c(3,19), xlab="Red Meat", ylab="White Meat")
+text(x=food$Red, y=food$White, labels=food$Country,col=grpMeat$cluster+1)
+```
+Next, we cluster on all nine protein groups and prepare the program to create seven clusters. The resulting clusters, shown in color on a scatter plot of white meat against red meat (any other pair of features could be selected), actually makes lot of sense. Countries in close geographic proximity tend to be clustered into the same group.
+```{r}
+
+## same analysis, but now with clustering on all
+## protein groups change the number of clusters to 7
+set.seed(123456789)
+grpProtein <- kmeans(food[,-1], centers=7, nstart=10)
+o=order(grpProtein$cluster)
+data.frame(food$Country[o],grpProtein$cluster[o])
+
+
+library(cluster)
+clusplot(food[,-1], grpProtein$cluster, main='2D representation of the Cluster solution', color=TRUE, shade=TRUE, labels=2, lines=0)
+```
+
+Alternatively we can implement a Hierarchical approach. We use the agnes function in the package cluster. Argument diss=FALSE indicates that we use the dissimilarity matrix that is being calculated from raw data. Argument metric=“euclidian” indicates that we use Euclidean distance. No standardization is used and the link function is the “average” linkage.
+
+```{r}
+foodagg=agnes(food,diss=FALSE,metric="euclidian")
+plot(foodagg, main='Dendrogram') ## dendrogram
+
+groups <- cutree(foodagg, k=4) # cut tree into 3 clusters
+rect.hclust(foodagg, k=4, border="red")
+```
+STUDY II: CUSTOMER SEGMENTATION
+
+Customer segmentation is as simple as it sounds: grouping customers by their characteristics - and why would you want to do that? To better serve their needs!
+
+Our example is to do with e-mail marketing. We use the dataset from this link: 
+```{r}
+
+offers<-read.table('offers.csv', sep = ';', header=T)
+head(offers)
+
+transactions<-read.table('transactions.csv', sep = ';', header=T)
+head(transactions)
+```
+Step 1: Organizing the information
+
+We have two data sets: one for the offers and the other for the transactions. First what we need to do is create a transaction matrix. That means, we need to put the offers we mailed out next to the transaction history of each customer. This is easily achieved with a pivot table.
+```{r}
+
+# Create transaction matrix (a pivot table like in Excel way!)
+library(reshape)
+pivot<-melt(transactions[1:2])
+## Using CustomerLastName as id variables
+pivot<-(cast(pivot,value~CustomerLastName,fill=0,fun.aggregate=function(x) length(x)))
+pivot<-cbind(offers,pivot[-1])
+
+# write.csv(file="pivot.csv",pivot) # to save your data
+
+cluster.data<-pivot[,8:length(pivot)]
+cluster.data<-t(cluster.data)
+head(cluster.data)
+
+```
+
+We need to calculate how far away each customer is from the cluster’s mean. To do this we could use many distances/dissimilarity index, one of which is the Gower dissimilarity.
+After the creation of a distance matrix, we implement a Ward’s hierarchical clustering procedure:
+
+```{r}
+
+library(cluster)
+D=daisy(cluster.data, metric='gower')
+
+
+H.fit <- hclust(D, method="ward")
+## The "ward" method has been renamed to "ward.D"; note new "ward.D2"
+plot(H.fit) # display dendrogram
+
+groups <- cutree(H.fit, k=4) # cut tree into 4 clusters
+
+# draw dendogram with red borders around the 4 clusters
+rect.hclust(H.fit, k=4, border="red") 
+
+# 2D representation of the Segmentation:
+clusplot(cluster.data, groups, color=TRUE, shade=TRUE,
+         labels=2, lines=0, main= 'Customer segments')
+```
+To get the top deals we will have to do a little bit of data manipulation. First we need to combine our clusters and transactions. Notably the lengths of the ‘tables’ holding transactions and clusters are different. So we need a way to merge the data . so we use the merge() function and give our columns sensible names:
+```{r}
+
+# Merge Data
+
+cluster.deals<-merge(transactions[1:2],groups,by.x = "CustomerLastName", by.y = "row.names")
+
+colnames(cluster.deals)<-c("Name","Offer","Cluster")
+head(cluster.deals)
+
+```
+We then want to repeat the pivoting process to get Offers in rows and clusters in columns counting the total number of transactions for each cluster. Once we have our pivot table we will merge it with the offers data table like we did before:
+```{r}
+
+# Get top deals by cluster
+cluster.pivot<-melt(cluster.deals,id=c("Offer","Cluster"))
+cluster.pivot<-cast(cluster.pivot,Offer~Cluster,fun.aggregate=length)
+cluster.topDeals<-cbind(offers,cluster.pivot[-1])
+head(cluster.topDeals)
+```
+STUDY III:SOCIAL CLUSTER ANALYSIS
+
+For this analysis, we will be using a dataset representing a random sample of 30.000 U.S. high school students who had profiles on a well-known Social Network in from 2006 to 2009.
+
+From the top 500 words appearing across all pages, 36 words were chosen to represent five categories of interests, namely extracurricular activities, fashion, religion, romance, and antisocial behavior. The 36 words include terms such as football, sexy, kissed, bible, shopping, death, and drugs. The final dataset indicates, for each person, how many times each word appeared in the person’s SNS profile.
+The dataset can be accessed from this link.
+
+```{r}
+url1='https://raw.githubusercontent.com/brenden17/sklearnlab/master/facebook/snsdata.csv'
+
+teens <- read.csv(url1)
+head(teens,3)
+str(teens)
+#As we had expected, the data include 30,000 teenagers with four variables indicating personal characteristics and 36 words indicating interests. Note that there are some NA’s in the variable gender.
+
+summary(teens$age)
+
+#We will skip all the data with missing values:
+
+teens = na.omit(teens)
+dim(teens)
+```
+We’ll start our cluster analysis by considering only the 36 features that represent the number of times various interests appeared on the SNS profiles of teens. For convenience, let’s make a data frame containing only these features:
+
+To apply z-score standardization to the interests data frame, we can use the scale() function with lapply(), as follows:
+
+To divide teens into five clusters, we can use the following command:
+
+number of examples falling in each of the groups. If the groups are too large or too small, then they are not likely to be very useful. To obtain the size of the kmeans() clusters, use the teen_clusters$size component as follows:
+
+```{r}
+interests <- teens[5:40]
+interests_z <- as.data.frame(lapply(interests, scale))
+
+teen_clusters <- kmeans(interests_z, 5)
+teen_clusters$size
+#For a more in-depth look at the clusters, we can examine the coordinates of the cluster centroids using the teen_clusters$centers component, which is as follows for the first eight features:
+
+teen_clusters$centers
+```
+The cluster characterization can be obtained with pie charts:
+```{r}
+
+par(mfrow=c(2,2))
+pie(colSums(interests[teen_clusters$cluster==1,]),cex=0.5)
+
+pie(colSums(interests[teen_clusters$cluster==2,]),cex=0.5)
+
+pie(colSums(interests[teen_clusters$cluster==3,]),cex=0.5)
+
+pie(colSums(interests[teen_clusters$cluster==4,]),cex=0.5)
+
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
